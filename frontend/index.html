@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<!-- Recruiter note: a deliberately plain front end that talks to the real API (login, add spend,
+     upload statement, see insights). The visual design is a placeholder and will be redone later;
+     the point here is that every button calls a real backend endpoint. -->
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FamilyFinance Pro</title>
+<style>body{font:16px system-ui;max-width:900px;margin:20px auto;padding:0 16px}section{border:1px solid #ccc;border-radius:8px;padding:12px;margin:12px 0}
+input,button{padding:6px 10px;margin:3px}pre{background:#f4f4f4;padding:8px;overflow:auto;max-height:260px}</style></head><body>
+<h1>FamilyFinance Pro</h1>
+<section><b>Login</b> (demo after running the pipeline: demo@familyfinance.dev / demo1234)<br>
+<input id="em" placeholder="email" value="demo@familyfinance.dev"><input id="pw" type="password" placeholder="password" value="demo1234">
+<button onclick="login()">Log in</button> <button onclick="reg()">Register</button> API: <input id="api" value="http://localhost:8000"></section>
+<section><b>Add a spend</b><br><input id="d" type="date"><input id="ds" placeholder="Description"><input id="am" type="number" placeholder="Amount">
+<button onclick="addTx()">Save</button> &nbsp; <b>Upload statement CSV</b> <input type="file" id="f" onchange="up()"></section>
+<section><b>Insights</b><br>
+<button onclick="show('/analytics/summary')">Monthly summary</button><button onclick="show('/analytics/anomalies')">Unusual spends</button>
+<button onclick="show('/analytics/recurring')">Recurring</button><button onclick="show('/analytics/health-score')">Health score</button>
+<button onclick="show('/recommendations')">What to buy and when</button><button onclick="show('/stores/compare?products=rice,dal,oil')">Best store</button></section>
+<pre id="out">Log in first.</pre>
+<script>
+let token="";const A=()=>document.getElementById("api").value,out=t=>document.getElementById("out").textContent=typeof t==="string"?t:JSON.stringify(t,null,2);
+const H=()=>({Authorization:"Bearer "+token});
+async function login(){const b=new URLSearchParams({username:em.value,password:pw.value});const r=await fetch(A()+"/auth/login",{method:"POST",body:b});const j=await r.json();token=j.access_token||"";out(token?"Logged in.":j)}
+async function reg(){const r=await fetch(A()+"/auth/register",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:em.value.split("@")[0],email:em.value,password:pw.value})});out(await r.json())}
+async function show(p){const r=await fetch(A()+p,{headers:H()});out(await r.json())}
+async function addTx(){const r=await fetch(A()+"/transactions",{method:"POST",headers:{...H(),"Content-Type":"application/json"},body:JSON.stringify({date:d.value,description:ds.value,amount:+am.value})});out(await r.json())}
+async function up(){const fd=new FormData();fd.append("file",f.files[0]);const r=await fetch(A()+"/transactions/upload",{method:"POST",headers:H(),body:fd});out(await r.json())}
+</script></body></html>

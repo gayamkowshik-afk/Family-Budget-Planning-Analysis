@@ -1,0 +1,8 @@
+product,naive_mape,holt_mape,windows,holt_beats_naive
+atta,1.87,1.93,43,False
+dal,1.81,1.85,43,False
+milk,1.92,1.96,43,False
+oil,2.06,2.12,43,False
+onion,1.93,1.92,43,True
+rice,1.8,1.82,43,False
+tomato,1.86,1.84,43,True

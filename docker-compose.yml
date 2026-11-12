@@ -1,0 +1,19 @@
+# Recruiter note: one command (docker compose up) starts the database, the API and the website.
+services:
+  db:
+    image: postgres:16
+    environment: {POSTGRES_USER: ffp, POSTGRES_PASSWORD: ffp, POSTGRES_DB: ffp}
+    volumes: [pgdata:/var/lib/postgresql/data]
+  api:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql://ffp:ffp@db:5432/ffp
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
+    depends_on: [db]
+    ports: ["8000:8000"]
+  web:
+    image: nginx:alpine
+    volumes: ["./frontend:/usr/share/nginx/html:ro"]
+    ports: ["8080:80"]
+volumes:
+  pgdata:

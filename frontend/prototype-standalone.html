@@ -1,0 +1,107 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>FamilyFinance Pro</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f3f6f2;--card:#fff;--ink:#14302a;--mut:#5d6f69;--line:#dbe3de;--acc:#0f7a5c;--acc2:#e8a317;--bad:#c2410c;--kid:#4338ca;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root{--bg:#0d1714;--card:#14241e;--ink:#e6f0ec;--mut:#9bb0a8;--line:#26403a;--acc:#3ccf9f;--acc2:#f5bf4a;--bad:#fb923c;--kid:#a5b4fc;color-scheme:dark}}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 'Bricolage Grotesque',system-ui,sans-serif}
+header{padding:18px 20px 0;max-width:1000px;margin:auto}h1{margin:0;font-size:1.7rem;font-weight:800;letter-spacing:-.02em}
+header p{margin:2px 0 12px;color:var(--mut)}
+nav{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px}
+nav button{border:1px solid var(--line);background:var(--card);color:var(--ink);padding:8px 14px;border-radius:999px;font:inherit;cursor:pointer;white-space:nowrap}
+nav button[aria-selected=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+main{max-width:1000px;margin:auto;padding:14px 20px 60px}
+.grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.c{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;min-width:0}
+h2{font-size:1.05rem;margin:0 0 10px}.big{font-size:2.3rem;font-weight:800;letter-spacing:-.03em;line-height:1.1}
+.m{color:var(--mut);font-size:.88rem}.row{display:flex;justify-content:space-between;gap:10px;align-items:center}
+.bar{height:8px;background:var(--line);border-radius:4px;overflow:hidden;margin:4px 0 10px}.bar i{display:block;height:100%;background:var(--acc)}.bar i.o{background:var(--bad)}
+input,select,button.b{font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);max-width:100%}
+button.b{background:var(--acc);color:#fff;border-color:var(--acc);cursor:pointer;font-weight:600}button.g{background:none;color:var(--ink);border-color:var(--line)}
+form{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0}
+:focus-visible{outline:3px solid var(--acc2);outline-offset:2px}
+.tw{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:.92rem}th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+.tag{display:inline-block;padding:1px 8px;border-radius:999px;font-size:.78rem;border:1px solid var(--line)}
+.buy{background:var(--acc);color:#fff;border-color:var(--acc)}.wait{background:var(--acc2);color:#222;border-color:var(--acc2)}.kid{color:var(--kid)}
+#t{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;display:none;z-index:9;max-width:90vw}
+svg{display:block}
+</style></head><body>
+<header><h1>FamilyFinance Pro</h1><p>Track spending, time your purchases, and teach kids to manage money.</p>
+<nav role="tablist" id="nav"></nav></header><main id="v"></main><div id="t" role="status"></div>
+<script>
+// ---------- "Backend": data store + REST-style API (swap fetch() for FastAPI later) ----------
+const KEY='ffp_v1',esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const inr=n=>'₹'+Math.round(n).toLocaleString('en-IN'),sum=a=>a.reduce((x,y)=>x+y,0),avg=a=>a.length?sum(a)/a.length:0;
+const CATS={Groceries:['rice','dal','atta','oil','milk','dmart','supermart','kirana','bigbasket','blinkit'],Vegetables:['vegetable','onion','tomato','sabzi','fruit'],Dining:['swiggy','zomato','restaurant','cafe','pizza'],Transport:['uber','ola','metro','petrol','fuel'],Utilities:['electricity','recharge','gas','broadband','water','jio','airtel'],Rent:['rent'],Education:['school','tuition','fees'],Health:['pharmacy','medical','doctor'],Entertainment:['netflix','spotify','movie','hotstar'],Shopping:['amazon','flipkart','myntra'],Income:['salary','refund']};
+const guess=d=>{d=d.toLowerCase();for(const k in CATS)if(CATS[k].some(w=>d.includes(w)))return k;return'Others'};
+let DB;try{DB=JSON.parse(localStorage.getItem(KEY))}catch(e){}
+DB=DB||{tx:[],budgets:{Groceries:8000,Vegetables:2500,Dining:3000,Transport:2500,Utilities:4000,Entertainment:1500,Shopping:3000},kids:[]};
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(DB))}catch(e){}};
+const ym=d=>d.slice(0,7),today=()=>new Date().toISOString().slice(0,10),dAgo=n=>new Date(Date.now()-n*864e5).toISOString().slice(0,10);
+const API={
+ addTx(t){t.desc=t.desc.trim();t.cat=t.cat||guess(t.desc);if(!t.desc||!(t.amt>0))return'Enter a description and an amount above 0.';
+  if(DB.tx.some(o=>o.date===t.date&&o.desc===t.desc&&o.amt===t.amt))return'Duplicate skipped.';
+  DB.tx.push({id:Date.now()+Math.random(),verified:false,source:'manual',ref:'',...t});save();return''},
+ importCsv(txt){let n=0,s=0;txt.split(/\r?\n/).forEach(l=>{const p=l.split(',');if(p.length<3||isNaN(Date.parse(p[0])))return;
+  const e=this.addTx({date:p[0].trim(),desc:p[1],amt:Math.abs(+p[2]),ref:(p[3]||'').trim(),source:'csv'});e?s++:n++});save();return{added:n,skipped:s}},
+ verify(ref,otp){const t=DB.tx.find(x=>x.ref&&x.ref===ref.trim());if(!t)return'No transaction with that ID. Add it or import a statement first.';
+  if(otp!=='123456')return'Wrong OTP. The demo gateway accepts 123456.';t.verified=true;save();return''},
+ month(m){const t=DB.tx.filter(x=>ym(x.date)===m),out=t.filter(x=>x.cat!=='Income'),inc=sum(t.filter(x=>x.cat==='Income').map(x=>x.amt)),by={};
+  out.forEach(x=>by[x.cat]=(by[x.cat]||0)+x.amt);const spent=sum(out.map(x=>x.amt));return{inc,spent,by,rate:inc?(inc-spent)/inc*100:0}},
+ anomalies(){const r=[];Object.keys(CATS).forEach(c=>{const a=DB.tx.filter(x=>x.cat===c&&c!=='Income');if(a.length<5)return;const m=avg(a.map(x=>x.amt)),sd=Math.sqrt(avg(a.map(x=>(x.amt-m)**2)));
+  a.forEach(x=>{if(x.amt>m+2*sd)r.push(x)})});return r},
+ recurring(){const g={};DB.tx.filter(x=>x.cat!=='Income').forEach(x=>{const k=x.desc.toLowerCase();(g[k]=g[k]||[]).push(x)});
+  return Object.values(g).filter(a=>new Set(a.map(x=>ym(x.date))).size>=2&&Math.max(...a.map(x=>x.amt))<=1.1*Math.min(...a.map(x=>x.amt))).map(a=>a[0])},
+ seed(){DB.tx=[];[0,1,2].forEach(i=>{const o=i*30;[[o+27,'Salary',68000,'Income'],[o+26,'House rent',18000],[o+25,'Electricity bill',1800],[o+24,'Netflix',649],[o+22,'DMart groceries',3200],[o+20,'Swiggy dinner',620],[o+18,'Tomato and onion',290],[o+15,'Jio recharge',999],[o+12,'Swiggy dinner',840],[o+11,'Uber ride',310],[o+8,'Amazon household items',1450],[o+6,'Pharmacy',560],[o+4,'Zomato lunch',470],[o+3,'Petrol',1500]].forEach(r=>DB.tx.push({id:Math.random(),date:dAgo(r[0]),desc:r[1],amt:r[2],cat:r[3]||guess(r[1]),verified:i===0&&r[1]==='Swiggy dinner',source:'demo',ref:i===0&&r[1]==='Swiggy dinner'?'UPI778899':''}));
+  DB.tx.push({id:Math.random(),date:dAgo(o+10),desc:'Rice 10 kg',amt:640,cat:'Groceries',verified:false,source:'demo',ref:''},{id:Math.random(),date:dAgo(o+9),desc:'Cooking oil',amt:410,cat:'Groceries',verified:false,source:'demo',ref:''})});
+  DB.tx.push({id:Math.random(),date:dAgo(31),desc:'Toor dal 5 kg',amt:820,cat:'Groceries',verified:false,source:'demo',ref:''});save()},
+ // price intelligence (simulated series; production: Agmarknet / crowdsourced bills)
+ items:[{n:'Rice (1 kg)',kw:'rice',b:62,cy:30},{n:'Toor dal (1 kg)',kw:'dal',b:165,cy:30},{n:'Onion (1 kg)',kw:'onion',b:34,cy:10},{n:'Tomato (1 kg)',kw:'tomato',b:30,cy:7},{n:'Cooking oil (1 L)',kw:'oil',b:135,cy:45}],
+ series(it,k){return Array.from({length:30},(_,i)=>it.b*(1+.13*Math.sin(i/4.2+k)+.04*Math.sin(i*1.9+k)))},
+ advice(it,k){const s=this.series(it,k),cur=s[29],srt=[...s].sort((a,b)=>a-b),rank=srt.findIndex(v=>v>=cur)/29,slope=cur-avg(s.slice(22,29));
+  const last=DB.tx.filter(x=>x.desc.toLowerCase().includes(it.kw)).map(x=>x.date).sort().pop(),since=last?Math.round((Date.now()-Date.parse(last))/864e5):null,due=since==null?null:it.cy-since;
+  let a,t;if(rank<=.3){a='Buy now';t='buy'}else if(rank>=.7){a='Wait';t='wait'}else{a='Fair price';t=''}
+  return{s,cur,rank,slope,due,a,t}},
+ kid(id){return DB.kids.find(k=>k.id==id)},
+ addKid(n,al){DB.kids.push({id:Date.now(),name:n,allow:al,bal:al,limits:{Snacks:300,Games:300,Fun:400},spends:[],goals:[]});save()},
+ kidSpend(id,c,a){const k=this.kid(id);if(!(a>0))return'Enter an amount above 0.';if(a>k.bal)return'Not enough balance in the wallet.';
+  const used=sum(k.spends.filter(s=>s.c===c&&ym(s.d)===ym(today())).map(s=>s.a));k.bal-=a;k.spends.push({c,a,d:today()});save();return used+a>k.limits[c]?'Saved. Heads up: '+c+' limit passed.':''}
+};
+// ---------- Frontend ----------
+let tab='Dashboard';const TABS=['Dashboard','Transactions','Budgets','Smart buy','Kids'];
+const toast=m=>{const t=document.getElementById('t');t.textContent=m;t.style.display='block';clearTimeout(toast.h);toast.h=setTimeout(()=>t.style.display='none',3200)};
+const go=t=>{tab=t;draw()};
+function spark(s,w=140,h=36){const mn=Math.min(...s),mx=Math.max(...s);return`<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true"><polyline fill="none" stroke="var(--acc)" stroke-width="2" points="${s.map((v,i)=>(i/29*w).toFixed(1)+','+(h-3-(v-mn)/(mx-mn||1)*(h-6)).toFixed(1)).join(' ')}"/></svg>`}
+const empty=`<div class="c"><h2>No data yet</h2><p class="m">Add a transaction, import a statement, or load a demo household to see insights.</p><button class="b" onclick="API.seed();draw()">Load demo household</button></div>`;
+const V={
+Dashboard(){if(!DB.tx.length)return empty;const m=ym(today()),d=API.month(m),an=API.anomalies(),rc=API.recurring();
+ return`<div class="grid"><div class="c"><div class="m">Spent this month</div><div class="big">${inr(d.spent)}</div><div class="m">Income ${inr(d.inc)}</div></div>
+ <div class="c"><div class="m">Savings rate</div><div class="big" style="color:${d.rate<20?'var(--bad)':'var(--acc)'}">${d.inc?d.rate.toFixed(0)+'%':'n/a'}</div><div class="m">${d.inc?(d.rate<20?'Below the 20% saving target.':'On track with the 50/30/20 rule.'):'Add your salary to see this.'}</div></div></div>
+ <div class="grid" style="margin-top:14px"><div class="c"><h2>Budget vs actual</h2>${Object.entries(DB.budgets).map(([c,l])=>{const v=d.by[c]||0,p=v/l*100;return`<div class="row"><span>${c}</span><span class="m">${inr(v)} of ${inr(l)}</span></div><div class="bar"><i class="${p>100?'o':''}" style="width:${Math.min(p,100)}%"></i></div>`}).join('')}</div>
+ <div class="c"><h2>Unusual spends</h2>${an.length?an.map(x=>`<div class="row"><span>${esc(x.desc)}</span><b>${inr(x.amt)}</b></div>`).join(''):'<p class="m">Nothing unusual found yet.</p>'}<h2 style="margin-top:16px">Recurring payments</h2>${rc.length?rc.map(x=>`<div class="row"><span>${esc(x.desc)}</span><span class="m">${inr(x.amt)} each month</span></div>`).join(''):'<p class="m">None detected.</p>'}</div></div>`},
+Transactions(){const cs=Object.keys(CATS);return`<div class="c"><h2>Add a transaction</h2><form onsubmit="addTx(event)"><input type="date" name="date" value="${today()}" required><input name="desc" placeholder="What did you pay for?" required><input name="amt" type="number" min="1" placeholder="Amount ₹" required><select name="cat"><option value="">Auto category</option>${cs.map(c=>`<option>${c}</option>`).join('')}</select><input name="ref" placeholder="Transaction ID (optional)"><button class="b">Save transaction</button></form></div>
+ <div class="grid" style="margin-top:14px"><div class="c"><h2>Import a statement</h2><p class="m">CSV with columns: date, description, amount, transaction ID.</p><input type="file" accept=".csv,.txt" onchange="imp(this)"></div>
+ <div class="c"><h2>Verify a payment</h2><p class="m">Demo gateway: use a saved transaction ID and OTP 123456.</p><form onsubmit="ver(event)"><input name="ref" placeholder="Transaction ID" required><input name="otp" placeholder="OTP" inputmode="numeric" required><button class="b">Verify</button></form></div></div>
+ <div class="c tw" style="margin-top:14px"><h2>History</h2>${DB.tx.length?`<table><tr><th>Date</th><th>Description</th><th>Category</th><th>Amount</th><th>Status</th></tr>${[...DB.tx].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,60).map(x=>`<tr><td>${x.date}</td><td>${esc(x.desc)}</td><td>${x.cat}</td><td>${x.cat==='Income'?'+':''}${inr(x.amt)}</td><td><span class="tag">${x.verified?'Verified':'Unverified'}</span></td></tr>`).join('')}</table>`:'<p class="m">Nothing here yet.</p>'}</div>`},
+Budgets(){return`<div class="c"><h2>Monthly budget by category</h2><form onsubmit="return false">${Object.entries(DB.budgets).map(([c,l])=>`<label style="display:flex;gap:8px;align-items:center;width:260px">${c}<input type="number" min="0" value="${l}" onchange="DB.budgets['${c}']=+this.value;save();toast('Budget saved')" style="width:110px;margin-left:auto"></label>`).join('')}</form></div>`},
+'Smart buy'(){const L=API.items.map((it,k)=>({it,r:API.advice(it,k)})),dueI=L.filter(x=>x.r.due!=null&&x.r.due<=7||x.r.a==='Buy now');
+ const base=sum((dueI.length?dueI:L).map(x=>x.r.cur)),S=[['Local kirana',1],['Supermarket',.95],['Online app',.92]].map(([n,f])=>{const sub=base*f,fee=n==='Online app'&&sub<499?40:0;return{n,t:sub+fee,fee}}).sort((a,b)=>a.t-b.t);
+ return`<div class="c"><h2>Best store for your next basket</h2><p class="m">Basket: ${(dueI.length?dueI:L).map(x=>x.it.n).join(', ')}</p>${S.map((s,i)=>`<div class="row"><span>${s.n}${i?'':' <span class="tag buy">Cheapest</span>'}</span><b>${inr(s.t)}</b>${s.fee?`<span class="m">includes ${inr(s.fee)} delivery</span>`:''}</div>`).join('')}</div>
+ <div class="c tw" style="margin-top:14px"><h2>What to buy and when</h2><p class="m">Prices below are simulated for the demo. The real version reads government mandi data and prices from scanned bills.</p><table><tr><th>Item</th><th>Today</th><th>30 days</th><th>Next purchase</th><th>Advice</th></tr>${L.map(({it,r})=>`<tr><td>${it.n}</td><td>${inr(r.cur)}</td><td>${spark(r.s)}</td><td>${r.due==null?'No history':r.due<=0?'Due now':'In '+r.due+' days'}</td><td><span class="tag ${r.t}">${r.a}</span> <span class="m">${r.a==='Buy now'?'Near the 30-day low':r.a==='Wait'?'Near the 30-day high':'Mid range'}</span></td></tr>`).join('')}</table></div>`},
+Kids(){return`<div class="c"><h2 class="kid">Family Money Teacher</h2><p class="m">Everything here is visible to your child. They know what you can see, and that is part of the lesson.</p><form onsubmit="addKid(event)"><input name="n" placeholder="Child's name" required><input name="al" type="number" min="0" placeholder="Monthly allowance ₹" required><label class="m"><input type="checkbox" required> My child and I agree to this wallet</label><button class="b">Create wallet</button></form></div>
+ ${DB.kids.map(k=>`<div class="c" style="margin-top:14px"><div class="row"><h2 class="kid">${esc(k.name)}</h2><b>${inr(k.bal)} left</b></div><div class="bar"><i style="width:${Math.max(0,Math.min(100,k.bal/(k.allow||1)*100))}%"></i></div>
+ <form onsubmit="kSpend(event,${k.id})"><select name="c">${Object.keys(k.limits).map(c=>`<option>${c}</option>`).join('')}</select><input name="a" type="number" min="1" placeholder="Amount ₹" required><button class="b">Log a spend</button><button type="button" class="b g" onclick="API.kid(${k.id}).bal+=API.kid(${k.id}).allow;save();draw()">Add monthly allowance</button></form>
+ <div class="m">${Object.entries(k.limits).map(([c,l])=>`${c}: ${inr(sum(k.spends.filter(s=>s.c===c).map(s=>s.a)))} of ${inr(l)}`).join(' | ')}</div>
+ <form onsubmit="kGoal(event,${k.id})"><input name="t" placeholder="Savings goal, e.g. Headphones" required><input name="g" type="number" min="1" placeholder="Target ₹" required><button class="b g">Add goal</button></form>
+ ${k.goals.map((g,i)=>`<div class="row"><span>${esc(g.t)}</span><span class="m">${inr(g.s)} of ${inr(g.g)}</span><button class="b g" onclick="goalAdd(${k.id},${i})">Save ₹100</button></div><div class="bar"><i style="width:${Math.min(100,g.s/g.g*100)}%"></i></div>`).join('')}</div>`).join('')}`}
+};
+function draw(){document.getElementById('nav').innerHTML=TABS.map(t=>`<button role="tab" aria-selected="${t===tab}" onclick="go('${t}')">${t}</button>`).join('');document.getElementById('v').innerHTML=V[tab]()}
+function addTx(e){e.preventDefault();const f=new FormData(e.target),r=API.addTx({date:f.get('date'),desc:f.get('desc'),amt:+f.get('amt'),cat:f.get('cat'),ref:f.get('ref')});toast(r||'Transaction saved');draw()}
+function imp(i){const f=i.files[0];if(!f)return;f.text().then(t=>{const r=API.importCsv(t);toast(r.skipped+' added, '+r.added+' skipped as duplicates or invalid');draw()})}
+function ver(e){e.preventDefault();const f=new FormData(e.target),r=API.verify(f.get('ref'),f.get('otp'));toast(r||'Payment verified');draw()}
+function addKid(e){e.preventDefault();const f=new FormData(e.target);API.addKid(f.get('n'),+f.get('al'));toast('Wallet created');draw()}
+function kSpend(e,id){e.preventDefault();const f=new FormData(e.target);toast(API.kidSpend(id,f.get('c'),+f.get('a'))||'Spend logged');draw()}
+function kGoal(e,id){e.preventDefault();const f=new FormData(e.target);API.kid(id).goals.push({t:f.get('t'),g:+f.get('g'),s:0});save();draw()}
+function goalAdd(id,i){const k=API.kid(id);if(k.bal<100)return toast('Not enough balance.');k.bal-=100;k.goals[i].s+=100;save();draw()}
+draw();
+</script></body></html>

@@ -1,0 +1,2 @@
+rules_only_accuracy,rules_plus_ml_accuracy,ml_alone_accuracy,ml_alone_macro_f1,test_rows
+0.8529,1.0,1.0,1.0,102
